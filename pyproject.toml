@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "threatscout"
+version = "0.1.0"
+description = "Query multiple free threat intelligence APIs simultaneously and get a unified report"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Justin Pitt", email = "justin@pittnet.net" }]
+keywords = ["threat intelligence", "cybersecurity", "virustotal", "cve", "ioc", "osint"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Information Technology",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+dependencies = [
+    "restlink>=0.1.0",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "responses>=0.23.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+threatscout = "threatscout.__main__:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["threatscout*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=threatscout --cov-report=term-missing"
