@@ -45,9 +45,11 @@ def render_report(report: Report) -> None:
     if report.verdict_confidence > 0:
         verdict_text += f"  (confidence: {report.verdict_confidence}%)"
 
-    resolved_line = (
-        f"\n[bold]Resolved IP:[/bold] {report.resolved_ip}" if report.resolved_ip else ""
-    )
+    resolved_line = ""
+    if report.resolved_ip:
+        resolved_line += f"\n[bold]Resolved IP:      [/bold] {report.resolved_ip}"
+    if report.resolved_hostname:
+        resolved_line += f"\n[bold]Resolved Hostname:[/bold] {report.resolved_hostname}"
     header = (
         f"[bold]Indicator:[/bold]  {report.indicator.value}  "
         f"[dim]({report.indicator.type})[/dim]"
@@ -57,9 +59,29 @@ def render_report(report: Report) -> None:
     console.print(Panel(header, title="[bold cyan]ThreatScout Report[/bold cyan]", expand=False))
     console.print()
 
-    # ── Per-source findings ───────────────────────────────────────────────────
-    for finding in sorted(report.findings, key=lambda f: f.source_name):
-        _render_finding(finding)
+    # ── Per-source findings, grouped by indicator ─────────────────────────────
+    # Group findings by indicator value so enriched indicators get their own section
+    seen: dict[str, list] = {}
+    for f in report.findings:
+        seen.setdefault(f.indicator.value, []).append(f)
+
+    # Original indicator first, then any enriched indicators in insertion order
+    ordered_keys = [report.indicator.value] + [
+        k for k in seen if k != report.indicator.value
+    ]
+
+    for key in ordered_keys:
+        group = seen.get(key, [])
+        if not group:
+            continue
+        ind = group[0].indicator
+        if ind.value != report.indicator.value:
+            console.print(
+                f"[bold dim]── Enriched: {ind.type.upper()} {ind.value} ──[/bold dim]"
+            )
+            console.print()
+        for finding in sorted(group, key=lambda f: f.source_name):
+            _render_finding(finding)
 
     # ── Footer ────────────────────────────────────────────────────────────────
     console.print(

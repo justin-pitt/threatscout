@@ -65,7 +65,8 @@ class Report:
     query_time_seconds: float = 0.0
     sources_queried: int = 0
     sources_errored: int = 0
-    resolved_ip: str | None = None          # DNS-resolved IP for domain/URL indicators
+    resolved_ip: str | None = None          # forward DNS: IP resolved from domain/URL
+    resolved_hostname: str | None = None    # reverse DNS: hostname resolved from IP
 
     def successful_findings(self) -> list[Finding]:
         return [f for f in self.findings if f.error is None]

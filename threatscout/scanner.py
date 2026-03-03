@@ -11,7 +11,7 @@ from threatscout.models.indicator import Indicator, IndicatorType
 from threatscout.models.finding import Finding, Report
 from threatscout.sources.base import ThreatSource
 from threatscout.enrichment.verdict import derive_verdict
-from threatscout.enrichment.dns_resolver import resolve_to_ip
+from threatscout.enrichment.dns_resolver import resolve_to_ip, resolve_to_hostname
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +39,13 @@ class Scanner:
         start = time.monotonic()
         findings = []
         resolved_ip = None
+        resolved_hostname = None
 
         if applicable:
             logger.info(f"Querying {len(applicable)} source(s) for {indicator.type} {indicator.value}")
             findings.extend(self._run_sources(applicable, indicator))
 
-        # DNS enrichment: for domains and URLs, resolve to IP and also query IP sources
+        # Forward DNS enrichment: for domains and URLs, resolve to IP and query IP sources
         if indicator.type in (IndicatorType.DOMAIN, IndicatorType.URL):
             resolved_ip = resolve_to_ip(indicator)
             if resolved_ip:
@@ -54,9 +55,19 @@ class Scanner:
                 if ip_applicable:
                     findings.extend(self._run_sources(ip_applicable, ip_indicator))
 
+        # Reverse DNS enrichment: for IPs, resolve to hostname and query domain sources
+        if indicator.type == IndicatorType.IP:
+            resolved_hostname = resolve_to_hostname(indicator)
+            if resolved_hostname:
+                logger.info(f"Reverse DNS resolved {indicator.value} -> {resolved_hostname}, querying domain sources")
+                domain_indicator = Indicator(resolved_hostname, IndicatorType.DOMAIN)
+                domain_applicable = [s for s in self._sources if s.supports(domain_indicator)]
+                if domain_applicable:
+                    findings.extend(self._run_sources(domain_applicable, domain_indicator))
+
         if not findings:
             logger.warning(f"No sources support indicator type: {indicator.type}")
-            return Report(indicator=indicator, resolved_ip=resolved_ip)
+            return Report(indicator=indicator, resolved_ip=resolved_ip, resolved_hostname=resolved_hostname)
 
         elapsed = time.monotonic() - start
         verdict, confidence = derive_verdict(findings)
@@ -70,6 +81,7 @@ class Scanner:
             sources_queried=len(applicable),
             sources_errored=len([f for f in findings if f.error]),
             resolved_ip=resolved_ip,
+            resolved_hostname=resolved_hostname,
         )
 
     def _run_sources(self, sources: list[ThreatSource], indicator: Indicator) -> list[Finding]:
