@@ -45,9 +45,13 @@ def render_report(report: Report) -> None:
     if report.verdict_confidence > 0:
         verdict_text += f"  (confidence: {report.verdict_confidence}%)"
 
+    resolved_line = (
+        f"\n[bold]Resolved IP:[/bold] {report.resolved_ip}" if report.resolved_ip else ""
+    )
     header = (
         f"[bold]Indicator:[/bold]  {report.indicator.value}  "
-        f"[dim]({report.indicator.type})[/dim]\n"
+        f"[dim]({report.indicator.type})[/dim]"
+        f"{resolved_line}\n"
         f"[bold]Verdict:  [/bold]  [{verdict_color}]{verdict_text}[/{verdict_color}]"
     )
     console.print(Panel(header, title="[bold cyan]ThreatScout Report[/bold cyan]", expand=False))
@@ -153,7 +157,13 @@ def main(indicator_str: str | None = None) -> Report:
     else:
         console.print("[yellow]WARN: OTX_API_KEY not set — AlienVault OTX skipped[/yellow]")
 
-    sources.append(NVDSource(api_key=os.getenv("NVD_API_KEY")))
+    nvd_key = os.getenv("NVD_API_KEY")
+    if nvd_key:
+        sources.append(NVDSource(api_key=nvd_key))
+    else:
+        console.print("[yellow]WARN: NVD_API_KEY not set — NVD running at reduced rate (5 req/30s)[/yellow]")
+        sources.append(NVDSource(api_key=None))
+
     sources.append(CISAKevSource())
 
     indicator = Indicator.detect(indicator_str)

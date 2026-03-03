@@ -1,6 +1,6 @@
 """
 Indicator — represents the thing being looked up.
-Supports IP addresses, domains, file hashes, and CVE IDs.
+Supports IP addresses, domains, URLs, file hashes, and CVE IDs.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import re
 class IndicatorType(str, Enum):
     IP = "ip"
     DOMAIN = "domain"
+    URL = "url"
     HASH = "hash"
     CVE = "cve"
 
@@ -44,6 +45,9 @@ class Indicator:
            re.match(r"^[a-fA-F0-9]{40}$", value) or \
            re.match(r"^[a-fA-F0-9]{64}$", value):
             return cls(value.lower(), IndicatorType.HASH)
+
+        if re.match(r"^https?://", value, re.IGNORECASE):
+            return cls(value, IndicatorType.URL)
 
         # Default to domain for anything else that looks like a hostname
         return cls(value.lower(), IndicatorType.DOMAIN)

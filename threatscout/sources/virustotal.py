@@ -1,12 +1,13 @@
 """
 VirusTotal API v3 source.
 
-Supports: IP, domain, file hash
+Supports: IP, domain, URL, file hash
 Free tier: 4 requests/minute, 500/day
 API key: https://www.virustotal.com/gui/join-us
 """
 
 from __future__ import annotations
+import base64
 import logging
 
 from restlink import ApiClient, NotFoundError, RetryConfig, RateLimitConfig, ApiKeyAuth
@@ -28,7 +29,7 @@ class VirusTotalSource(ThreatSource):
     and IPs/domains (reputation and categorization data).
     """
 
-    supported_types = [IndicatorType.IP, IndicatorType.DOMAIN, IndicatorType.HASH]
+    supported_types = [IndicatorType.IP, IndicatorType.DOMAIN, IndicatorType.URL, IndicatorType.HASH]
 
     def __init__(self, api_key: str) -> None:
         self._client = ApiClient(
@@ -66,6 +67,9 @@ class VirusTotalSource(ThreatSource):
             return f"/domains/{indicator.value}"
         elif indicator.type == IndicatorType.HASH:
             return f"/files/{indicator.value}"
+        elif indicator.type == IndicatorType.URL:
+            url_id = base64.urlsafe_b64encode(indicator.value.encode()).rstrip(b"=").decode()
+            return f"/urls/{url_id}"
         raise ValueError(f"Unsupported indicator type: {indicator.type}")
 
     def _normalize(self, indicator: Indicator, data: dict) -> Finding:

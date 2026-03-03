@@ -1,7 +1,7 @@
 """
 AlienVault OTX (Open Threat Exchange) source.
 
-Supports: IP, domain, hash
+Supports: IP, domain, URL, hash
 Free tier: Unlimited (requires free account)
 API key: https://otx.alienvault.com/accounts/register
 """
@@ -31,7 +31,7 @@ class AlienVaultOTXSource(ThreatSource):
     malware family names, threat actor associations, and campaign tags.
     """
 
-    supported_types = [IndicatorType.IP, IndicatorType.DOMAIN, IndicatorType.HASH]
+    supported_types = [IndicatorType.IP, IndicatorType.DOMAIN, IndicatorType.URL, IndicatorType.HASH]
 
     def __init__(self, api_key: str) -> None:
         self._client = ApiClient(
@@ -58,6 +58,7 @@ class AlienVaultOTXSource(ThreatSource):
         return {
             IndicatorType.IP: "IPv4",
             IndicatorType.DOMAIN: "domain",
+            IndicatorType.URL: "url",
             IndicatorType.HASH: "file",
         }[indicator.type]
 

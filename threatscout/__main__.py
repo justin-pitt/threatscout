@@ -132,6 +132,15 @@ def cve(cve_id: str, fmt: str, output: str | None):
 
 
 @cli.command()
+@click.argument("url")
+@click.option("--format", "fmt", default="table", type=click.Choice(["table", "json"]))
+@click.option("--output", default=None, help="Save report to file")
+def url(url: str, fmt: str, output: str | None):
+    """Look up a URL across all configured sources."""
+    _run_query(url, output, fmt)
+
+
+@cli.command()
 @click.argument("indicator")
 @click.option("--format", "fmt", default="table", type=click.Choice(["table", "json"]))
 @click.option("--output", default=None, help="Save report to file")
@@ -139,7 +148,7 @@ def scan(indicator: str, fmt: str, output: str | None):
     """
     Auto-detect the indicator type and query all applicable sources.
 
-    Works with IPs, domains, file hashes, and CVE IDs.
+    Works with IPs, domains, URLs, file hashes, and CVE IDs.
     """
     _run_query(indicator, output, fmt)
 
