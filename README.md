@@ -1,6 +1,6 @@
 # threatscout
 
-A Python CLI tool that queries multiple free threat intelligence and vulnerability APIs simultaneously and returns a unified, enriched report on any indicator — IP address, domain, URL, file hash, or CVE. For domain and URL indicators, it automatically resolves the hostname to an IP and queries IP-based sources as well.
+A Python CLI tool that queries multiple free threat intelligence and vulnerability APIs simultaneously and returns a unified, enriched report on any indicator — IP address, domain, URL, file hash, or CVE. DNS enrichment runs automatically in both directions: domain/URL indicators resolve to their IP and query IP-based sources, and IP indicators perform a reverse DNS lookup to find the associated hostname and query domain-based sources.
 
 ```bash
 # Look up an IP across all sources
@@ -43,7 +43,7 @@ python -m threatscout.output.console CVE-2021-44228
 
 When investigating a suspicious indicator, analysts typically open 4–6 browser tabs to check VirusTotal, AbuseIPDB, AlienVault OTX, and NVD separately, then manually piece together the results. This tool automates that process — querying all configured sources in parallel and returning a single normalized report in seconds.
 
-It is built on top of [restlink](https://github.com/youruser/restlink), which handles authentication, retries, and rate limiting for each source API.
+It is built on top of [restlink](https://github.com/justin-pitt/restlink), which handles authentication, retries, and rate limiting for each source API.
 
 ---
 
@@ -77,7 +77,7 @@ threatscout/
 │   └── finding.py       # Finding and Report dataclasses + RiskLevel enum
 ├── enrichment/
 │   ├── verdict.py       # Derives an overall verdict from all findings
-│   └── dns_resolver.py  # Resolves domain/URL indicators to IP for enrichment
+│   └── dns_resolver.py  # Forward DNS (domain/URL → IP) and reverse DNS (IP → hostname)
 └── output/
     └── console.py       # Rich terminal output with color-coded verdict
 ```
@@ -99,32 +99,36 @@ Scanner — determines which sources support this indicator type
                   Normalize → Finding objects
                       │
                       ▼
-           [domain / URL only] DNS resolution
-                      │
-                      ▼
+           [domain / URL] Forward DNS → resolved IP
            Scanner queries IP sources against resolved IP
            (AbuseIPDB, VirusTotal, AlienVault for the IP)
+                      │
+           [IP] Reverse DNS (PTR) → resolved hostname
+           Scanner queries domain sources against hostname
+           (VirusTotal, AlienVault for the domain)
                       │
                       ▼
                   Verdict engine → overall risk level
                       │
                       ▼
                   Console report or JSON output
-                  (resolved IP shown in report header)
+                  (resolved IP / hostname shown in report header,
+                   enriched findings in a separate labelled section)
 ```
 
 ---
 
 ## Installation
 
-**Prerequisites:** Python 3.10+ and `setuptools` are required.
+**Prerequisites:** Python 3.10+
 
 ```bash
-pip install setuptools
-git clone https://github.com/youruser/threatscout.git
+git clone https://github.com/justin-pitt/threatscout.git
 cd threatscout
 pip install -e .
 ```
+
+`pip install -e .` automatically installs all dependencies including [restlink](https://github.com/justin-pitt/restlink) directly from GitHub.
 
 Copy `.env.example` to `.env` and add your API keys:
 
@@ -148,30 +152,37 @@ All keys are free. See [Getting API Keys](#getting-api-keys) below.
 ```
 threatscout ip 198.51.100.42
 
-  ┌─────────────────────────────────────────────┐
-  │  ThreatScout Report                         │
-  │  Indicator: 198.51.100.42  (ip)             │
-  │  Verdict:   🔴 MALICIOUS  (confidence: 87%) │
-  └─────────────────────────────────────────────┘
+  ╭──────────────── ThreatScout Report ─────────────────╮
+  │ Indicator:         198.51.100.42  (ip)               │
+  │ Resolved Hostname: malicious-host.example.com        │
+  │ Verdict:           🔴 MALICIOUS  (confidence: 87%)   │
+  ╰──────────────────────────────────────────────────────╯
 
-  VirusTotal
-    Detections:    14 / 92 engines
-    Categories:    malware, phishing
-    Last analysis: 2025-02-28
+  AbuseIPDB  🔴 MALICIOUS
+    Abuse Score        94 / 100
+    Country            RU
+    ISP                Example Hosting Ltd
 
-  AbuseIPDB
-    Abuse score:   94 / 100
-    Reports:       312 reports from 87 users
-    Country:       RU
-    ISP:           Example Hosting Ltd
+  VirusTotal  🔴 MALICIOUS
+    Detections         14 / 92 engines
+    Categories         malware, phishing
+    Last Analysis      2025-02-28
 
-  AlienVault OTX
-    Pulses:        7 threat intelligence pulses
-    Malware:       Emotet, TrickBot
-    Tags:          botnet, c2, ransomware
+  AlienVault OTX  🔴 MALICIOUS
+    OTX Pulses         7
+    Malware            Emotet, TrickBot
+    Tags               botnet, c2, ransomware
 
-  ─────────────────────────────────────────────
-  Sources queried: 3  |  Query time: 1.4s
+── Enriched: DOMAIN malicious-host.example.com ──
+
+  AlienVault OTX  🟡 SUSPICIOUS
+    OTX Pulses         3
+    Tags               c2, malware
+
+  VirusTotal  🟡 SUSPICIOUS
+    Detections         2 / 92 engines
+
+  Sources queried: 3  |  Errors: 0  |  Query time: 1.4s
 ```
 
 ---

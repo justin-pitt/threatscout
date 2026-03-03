@@ -20,7 +20,7 @@ classifiers = [
     "Topic :: Security",
 ]
 dependencies = [
-    "restlink>=0.1.0",
+    "restlink @ git+https://github.com/justin-pitt/restlink.git",
     "click>=8.1.0",
     "rich>=13.0.0",
     "python-dotenv>=1.0.0",
