@@ -95,7 +95,7 @@ class NVDSource(ThreatSource):
             risk_level=risk,
             cvss_score=cvss_score,
             cvss_severity=cvss_severity,
-            description=description[:300] + "..." if len(description) > 300 else description,
+            description=description[:300] + f"… [+{len(description) - 300} chars]" if len(description) > 300 else description,
             published_date=cve.get("published", "")[:10],
             raw=data,
         )

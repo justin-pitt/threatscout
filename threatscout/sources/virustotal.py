@@ -97,12 +97,16 @@ class VirusTotalSource(ThreatSource):
         # Tags
         tags = attrs.get("tags", [])
 
-        # Last analysis date
+        # Last analysis date — flag results older than 6 months as stale
         last_analysis_ts = attrs.get("last_analysis_date")
         last_analysis = None
         if last_analysis_ts:
             from datetime import datetime, timezone
-            last_analysis = datetime.fromtimestamp(last_analysis_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+            last_analysis_dt = datetime.fromtimestamp(last_analysis_ts, tz=timezone.utc)
+            last_analysis = last_analysis_dt.strftime("%Y-%m-%d")
+            age_days = (datetime.now(timezone.utc) - last_analysis_dt).days
+            if age_days > 180:
+                tags = list(tags) + [f"stale-analysis ({age_days}d old)"]
 
         return Finding(
             source_name=self.name,

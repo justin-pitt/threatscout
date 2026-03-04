@@ -54,6 +54,8 @@ class Scanner:
                 ip_applicable = [s for s in self._sources if s.supports(ip_indicator)]
                 if ip_applicable:
                     findings.extend(self._run_sources(ip_applicable, ip_indicator))
+            else:
+                logger.warning(f"DNS enrichment skipped — could not resolve {indicator.value} to an IP address")
 
         # Reverse DNS enrichment: for IPs, resolve to hostname and query domain sources
         if indicator.type == IndicatorType.IP:
@@ -64,6 +66,8 @@ class Scanner:
                 domain_applicable = [s for s in self._sources if s.supports(domain_indicator)]
                 if domain_applicable:
                     findings.extend(self._run_sources(domain_applicable, domain_indicator))
+            else:
+                logger.warning(f"Reverse DNS enrichment skipped — no PTR record for {indicator.value}")
 
         if not findings:
             logger.warning(f"No sources support indicator type: {indicator.type}")
