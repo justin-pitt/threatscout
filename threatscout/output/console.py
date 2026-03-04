@@ -3,6 +3,8 @@ Console output — renders a Report to the terminal using Rich.
 """
 
 from __future__ import annotations
+import csv
+import io
 import logging
 import os
 import sys
@@ -15,6 +17,20 @@ from rich import box
 from rich.text import Text
 
 from threatscout.models.finding import Report, Finding, RiskLevel
+
+_RISK_ORDER = {
+    RiskLevel.CLEAN: 0,
+    RiskLevel.UNKNOWN: 1,
+    RiskLevel.SUSPICIOUS: 2,
+    RiskLevel.MALICIOUS: 3,
+    RiskLevel.ERROR: -1,
+}
+
+_MIN_RISK_THRESHOLD = {
+    "clean": _RISK_ORDER[RiskLevel.CLEAN],
+    "suspicious": _RISK_ORDER[RiskLevel.SUSPICIOUS],
+    "malicious": _RISK_ORDER[RiskLevel.MALICIOUS],
+}
 
 console = Console(legacy_windows=False)
 
@@ -35,7 +51,15 @@ _RISK_ICON = {
 }
 
 
-def render_report(report: Report) -> None:
+def _filter_findings(findings: list[Finding], min_risk: str | None) -> list[Finding]:
+    """Filter findings to those at or above the minimum risk threshold."""
+    if not min_risk:
+        return findings
+    threshold = _MIN_RISK_THRESHOLD.get(min_risk.lower(), 0)
+    return [f for f in findings if _RISK_ORDER.get(f.risk_level, -1) >= threshold]
+
+
+def render_report(report: Report, min_risk: str | None = None) -> None:
     """Render a full report to the terminal."""
 
     # ── Header panel ──────────────────────────────────────────────────────────
@@ -61,8 +85,9 @@ def render_report(report: Report) -> None:
 
     # ── Per-source findings, grouped by indicator ─────────────────────────────
     # Group findings by indicator value so enriched indicators get their own section
+    visible_findings = _filter_findings(report.findings, min_risk)
     seen: dict[str, list] = {}
-    for f in report.findings:
+    for f in visible_findings:
         seen.setdefault(f.indicator.value, []).append(f)
 
     # Original indicator first, then any enriched indicators in insertion order
@@ -138,6 +163,46 @@ def _render_finding(f: Finding) -> None:
         console.print(f"    [dim]{label:<18}[/dim] {value}")
 
     console.print()
+
+
+def render_csv(report: Report, min_risk: str | None = None) -> str:
+    """Render a report as a CSV string."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "indicator", "indicator_type", "source", "risk_level",
+        "detections", "total_engines", "confidence", "pulse_count",
+        "cvss_score", "cvss_severity", "is_known_exploited",
+        "country", "isp", "categories", "malware_families", "tags",
+        "last_analysis", "description", "error",
+        "resolved_ip", "resolved_hostname",
+    ])
+    visible = _filter_findings(report.findings, min_risk)
+    for f in visible:
+        writer.writerow([
+            report.indicator.value,
+            report.indicator.type,
+            f.source_name,
+            f.risk_level,
+            f.detections,
+            f.total_engines,
+            f.confidence,
+            f.pulse_count,
+            f.cvss_score,
+            f.cvss_severity,
+            f.is_known_exploited,
+            f.country,
+            f.isp,
+            "|".join(f.categories or []),
+            "|".join(f.malware_families or []),
+            "|".join(f.tags or []),
+            f.last_analysis,
+            f.description,
+            f.error,
+            report.resolved_ip or "",
+            report.resolved_hostname or "",
+        ])
+    return buf.getvalue()
 
 
 def main(indicator_str: str | None = None) -> Report:

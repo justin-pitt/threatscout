@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import re
+import socket
 
 
 class IndicatorType(str, Enum):
@@ -40,6 +41,13 @@ class Indicator:
 
         if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", value):
             return cls(value, IndicatorType.IP)
+
+        # IPv6 detection via socket validation (handles all valid forms)
+        try:
+            socket.inet_pton(socket.AF_INET6, value)
+            return cls(value.lower(), IndicatorType.IP)
+        except (socket.error, OSError):
+            pass
 
         if re.match(r"^[a-fA-F0-9]{32}$", value) or \
            re.match(r"^[a-fA-F0-9]{40}$", value) or \

@@ -16,8 +16,8 @@ load_dotenv()
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
 
-def _build_scanner():
-    """Build a Scanner with all configured sources."""
+def _build_scanner(include: tuple[str, ...] = (), exclude: tuple[str, ...] = ()):
+    """Build a Scanner with all configured sources, optionally filtered by name."""
     from threatscout.scanner import Scanner
     from threatscout.sources.virustotal import VirusTotalSource
     from threatscout.sources.abuseipdb import AbuseIPDBSource
@@ -74,6 +74,14 @@ def _build_scanner():
     else:
         warnings.append("SHODAN_API_KEY not set — Shodan skipped (paid key at account.shodan.io)")
 
+    # Apply source selection filters
+    include_lower = {s.lower() for s in include}
+    exclude_lower = {s.lower() for s in exclude}
+    if include_lower:
+        sources = [s for s in sources if s.name.lower() in include_lower]
+    if exclude_lower:
+        sources = [s for s in sources if s.name.lower() not in exclude_lower]
+
     for w in warnings:
         click.echo(click.style(f"⚠  {w}", fg="yellow"), err=True)
 
@@ -84,12 +92,19 @@ def _build_scanner():
     return Scanner(sources=sources)
 
 
-def _run_query(value: str, output: str | None, fmt: str) -> None:
+def _run_query(
+    value: str,
+    output: str | None,
+    fmt: str,
+    include: tuple[str, ...] = (),
+    exclude: tuple[str, ...] = (),
+    min_risk: str | None = None,
+) -> None:
     from threatscout.models.indicator import Indicator
-    from threatscout.output.console import render_report
+    from threatscout.output.console import render_report, render_csv
 
     indicator = Indicator.detect(value)
-    scanner = _build_scanner()
+    scanner = _build_scanner(include=include, exclude=exclude)
     report = scanner.scan(indicator)
 
     if fmt == "json":
@@ -100,8 +115,16 @@ def _run_query(value: str, output: str | None, fmt: str) -> None:
             click.echo(f"Report saved to {output}")
         else:
             click.echo(data)
+    elif fmt == "csv":
+        csv_data = render_csv(report, min_risk=min_risk)
+        if output:
+            with open(output, "w", encoding="utf-8", newline="") as f:
+                f.write(csv_data)
+            click.echo(f"Report saved to {output}")
+        else:
+            click.echo(csv_data, nl=False)
     else:
-        render_report(report)
+        render_report(report, min_risk=min_risk)
         if output:
             with open(output, "w") as f:
                 json.dump(report.to_dict(), f, indent=2)
@@ -116,62 +139,78 @@ def cli():
     pass
 
 
+_COMMON_OPTIONS = [
+    click.option("--format", "fmt", default="table", type=click.Choice(["table", "json", "csv"])),
+    click.option("--output", default=None, help="Save report to file"),
+    click.option("--sources", default=None, help="Comma-separated list of sources to use (e.g. virustotal,shodan)"),
+    click.option("--exclude", default=None, help="Comma-separated list of sources to skip"),
+    click.option("--min-risk", default=None, type=click.Choice(["clean", "suspicious", "malicious"]),
+                 help="Only show findings at or above this risk level"),
+]
+
+
+def _add_common_options(func):
+    for option in reversed(_COMMON_OPTIONS):
+        func = option(func)
+    return func
+
+
+def _parse_csv_arg(value: str | None) -> tuple[str, ...]:
+    if not value:
+        return ()
+    return tuple(v.strip() for v in value.split(",") if v.strip())
+
+
 @cli.command()
 @click.argument("ip_address")
-@click.option("--format", "fmt", default="table", type=click.Choice(["table", "json"]))
-@click.option("--output", default=None, help="Save report to file")
-def ip(ip_address: str, fmt: str, output: str | None):
+@_add_common_options
+def ip(ip_address: str, fmt: str, output: str | None, sources: str | None, exclude: str | None, min_risk: str | None):
     """Look up an IP address across all configured sources."""
-    _run_query(ip_address, output, fmt)
+    _run_query(ip_address, output, fmt, _parse_csv_arg(sources), _parse_csv_arg(exclude), min_risk)
 
 
 @cli.command()
 @click.argument("domain_name")
-@click.option("--format", "fmt", default="table", type=click.Choice(["table", "json"]))
-@click.option("--output", default=None, help="Save report to file")
-def domain(domain_name: str, fmt: str, output: str | None):
+@_add_common_options
+def domain(domain_name: str, fmt: str, output: str | None, sources: str | None, exclude: str | None, min_risk: str | None):
     """Look up a domain across all configured sources."""
-    _run_query(domain_name, output, fmt)
+    _run_query(domain_name, output, fmt, _parse_csv_arg(sources), _parse_csv_arg(exclude), min_risk)
 
 
 @cli.command()
 @click.argument("file_hash")
-@click.option("--format", "fmt", default="table", type=click.Choice(["table", "json"]))
-@click.option("--output", default=None, help="Save report to file")
-def hash(file_hash: str, fmt: str, output: str | None):
+@_add_common_options
+def hash(file_hash: str, fmt: str, output: str | None, sources: str | None, exclude: str | None, min_risk: str | None):
     """Look up a file hash (MD5, SHA1, or SHA256) across all configured sources."""
-    _run_query(file_hash, output, fmt)
+    _run_query(file_hash, output, fmt, _parse_csv_arg(sources), _parse_csv_arg(exclude), min_risk)
 
 
 @cli.command()
 @click.argument("cve_id")
-@click.option("--format", "fmt", default="table", type=click.Choice(["table", "json"]))
-@click.option("--output", default=None, help="Save report to file")
-def cve(cve_id: str, fmt: str, output: str | None):
+@_add_common_options
+def cve(cve_id: str, fmt: str, output: str | None, sources: str | None, exclude: str | None, min_risk: str | None):
     """Look up a CVE ID for CVSS scores, description, and exploitation status."""
-    _run_query(cve_id, output, fmt)
+    _run_query(cve_id, output, fmt, _parse_csv_arg(sources), _parse_csv_arg(exclude), min_risk)
 
 
 @cli.command()
 @click.argument("url")
-@click.option("--format", "fmt", default="table", type=click.Choice(["table", "json"]))
-@click.option("--output", default=None, help="Save report to file")
-def url(url: str, fmt: str, output: str | None):
+@_add_common_options
+def url(url: str, fmt: str, output: str | None, sources: str | None, exclude: str | None, min_risk: str | None):
     """Look up a URL across all configured sources."""
-    _run_query(url, output, fmt)
+    _run_query(url, output, fmt, _parse_csv_arg(sources), _parse_csv_arg(exclude), min_risk)
 
 
 @cli.command()
 @click.argument("indicator")
-@click.option("--format", "fmt", default="table", type=click.Choice(["table", "json"]))
-@click.option("--output", default=None, help="Save report to file")
-def scan(indicator: str, fmt: str, output: str | None):
+@_add_common_options
+def scan(indicator: str, fmt: str, output: str | None, sources: str | None, exclude: str | None, min_risk: str | None):
     """
     Auto-detect the indicator type and query all applicable sources.
 
     Works with IPs, domains, URLs, file hashes, and CVE IDs.
     """
-    _run_query(indicator, output, fmt)
+    _run_query(indicator, output, fmt, _parse_csv_arg(sources), _parse_csv_arg(exclude), min_risk)
 
 
 if __name__ == "__main__":

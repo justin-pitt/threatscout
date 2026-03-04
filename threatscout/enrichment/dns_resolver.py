@@ -33,7 +33,7 @@ def resolve_to_hostname(indicator: Indicator) -> str | None:
 
 def resolve_to_ip(indicator: Indicator) -> str | None:
     """
-    Resolve a DOMAIN or URL indicator to its IPv4 address.
+    Resolve a DOMAIN or URL indicator to its IP address (IPv4 preferred, IPv6 fallback).
 
     Returns the resolved IP string, or None if resolution fails or the
     indicator type doesn't support DNS resolution.
@@ -49,8 +49,13 @@ def resolve_to_ip(indicator: Indicator) -> str | None:
         return None
 
     try:
-        ip = socket.gethostbyname(hostname)
-        logger.debug(f"DNS resolved {hostname} -> {ip}")
+        # getaddrinfo returns both IPv4 and IPv6; prefer IPv4 (AF_INET) when available
+        results = socket.getaddrinfo(hostname, None)
+        ipv4 = [r[4][0] for r in results if r[0] == socket.AF_INET]
+        ipv6 = [r[4][0] for r in results if r[0] == socket.AF_INET6]
+        ip = (ipv4 or ipv6 or [None])[0]
+        if ip:
+            logger.debug(f"DNS resolved {hostname} -> {ip}")
         return ip
     except socket.gaierror as e:
         logger.debug(f"DNS resolution failed for {hostname}: {e}")
