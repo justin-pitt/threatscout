@@ -24,6 +24,11 @@ def _build_scanner():
     from threatscout.sources.alienvault import AlienVaultOTXSource
     from threatscout.sources.nvd import NVDSource
     from threatscout.sources.cisa_kev import CISAKevSource
+    from threatscout.sources.malwarebazaar import MalwareBazaarSource
+    from threatscout.sources.urlscan import URLScanSource
+    from threatscout.sources.whois_source import WHOISSource
+    from threatscout.sources.greynoise import GreyNoiseSource
+    from threatscout.sources.shodan import ShodanSource
 
     sources = []
     warnings = []
@@ -50,8 +55,24 @@ def _build_scanner():
     nvd_key = os.getenv("NVD_API_KEY")
     sources.append(NVDSource(api_key=nvd_key))
 
-    # CISA KEV needs no key
+    # Always-on free sources (no key required)
     sources.append(CISAKevSource())
+    sources.append(MalwareBazaarSource())
+    sources.append(URLScanSource())
+    sources.append(WHOISSource())
+
+    # Optional paid/community sources
+    gn_key = os.getenv("GREYNOISE_API_KEY")
+    if gn_key:
+        sources.append(GreyNoiseSource(api_key=gn_key))
+    else:
+        warnings.append("GREYNOISE_API_KEY not set — GreyNoise skipped (free community key at viz.greynoise.io)")
+
+    shodan_key = os.getenv("SHODAN_API_KEY")
+    if shodan_key:
+        sources.append(ShodanSource(api_key=shodan_key))
+    else:
+        warnings.append("SHODAN_API_KEY not set — Shodan skipped (paid key at account.shodan.io)")
 
     for w in warnings:
         click.echo(click.style(f"⚠  {w}", fg="yellow"), err=True)

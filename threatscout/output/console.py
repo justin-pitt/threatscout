@@ -158,6 +158,11 @@ def main(indicator_str: str | None = None) -> Report:
     from threatscout.sources.alienvault import AlienVaultOTXSource
     from threatscout.sources.nvd import NVDSource
     from threatscout.sources.cisa_kev import CISAKevSource
+    from threatscout.sources.malwarebazaar import MalwareBazaarSource
+    from threatscout.sources.urlscan import URLScanSource
+    from threatscout.sources.whois_source import WHOISSource
+    from threatscout.sources.greynoise import GreyNoiseSource
+    from threatscout.sources.shodan import ShodanSource
 
     sources = []
 
@@ -187,6 +192,17 @@ def main(indicator_str: str | None = None) -> Report:
         sources.append(NVDSource(api_key=None))
 
     sources.append(CISAKevSource())
+    sources.append(MalwareBazaarSource())
+    sources.append(URLScanSource())
+    sources.append(WHOISSource())
+
+    gn_key = os.getenv("GREYNOISE_API_KEY")
+    if gn_key:
+        sources.append(GreyNoiseSource(api_key=gn_key))
+
+    shodan_key = os.getenv("SHODAN_API_KEY")
+    if shodan_key:
+        sources.append(ShodanSource(api_key=shodan_key))
 
     indicator = Indicator.detect(indicator_str)
     scanner = Scanner(sources=sources)
