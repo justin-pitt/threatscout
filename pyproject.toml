@@ -37,6 +37,10 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
 ]
+web = [
+    "django>=5.0",
+    "psycopg[binary]>=3.1",
+]
 
 [project.scripts]
 threatscout = "threatscout.__main__:cli"

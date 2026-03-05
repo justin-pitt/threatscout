@@ -1,0 +1,79 @@
+{% extends "scans/base.html" %}
+{% load scan_filters %}
+
+{% block title %}Scan History — ThreatScout{% endblock %}
+
+{% block content %}
+<h1>Scan History</h1>
+
+<form method="get" class="search-bar">
+  <input type="text" name="q" value="{{ query }}" placeholder="Search indicators, types, IPs, hostnames...">
+  <select name="verdict">
+    <option value="">All verdicts</option>
+    <option value="malicious" {% if verdict_filter == "malicious" %}selected{% endif %}>Malicious</option>
+    <option value="suspicious" {% if verdict_filter == "suspicious" %}selected{% endif %}>Suspicious</option>
+    <option value="clean" {% if verdict_filter == "clean" %}selected{% endif %}>Clean</option>
+    <option value="unknown" {% if verdict_filter == "unknown" %}selected{% endif %}>Unknown</option>
+  </select>
+  <button type="submit" class="btn">Search</button>
+</form>
+
+{% if page.object_list %}
+<table>
+  <thead>
+    <tr>
+      <th>Time</th>
+      <th>Indicator</th>
+      <th>Type</th>
+      <th>Verdict</th>
+      <th>Confidence</th>
+      <th>Sources</th>
+      <th>Duration</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in page %}
+    <tr>
+      <td style="color: var(--text-dim); white-space: nowrap;">{{ r.created_at|date:"M d, H:i" }}</td>
+      <td><a href="{% url 'report' r.pk %}">{{ r.indicator_value }}</a></td>
+      <td style="color: var(--text-dim);">{{ r.indicator_type }}</td>
+      <td>
+        <span class="verdict-dot" style="background: {{ r.verdict|verdict_color }};"></span>
+        {{ r.verdict }}
+      </td>
+      <td>{% if r.verdict_confidence %}{{ r.verdict_confidence }}%{% else %}&mdash;{% endif %}</td>
+      <td>{{ r.sources_queried }}{% if r.sources_errored %} <span style="color: var(--red);">({{ r.sources_errored }} err)</span>{% endif %}</td>
+      <td style="color: var(--text-dim);">{{ r.query_time_seconds|floatformat:1 }}s</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if page.has_other_pages %}
+<div class="pagination">
+  {% if page.has_previous %}
+    <a href="?q={{ query }}&verdict={{ verdict_filter }}&page={{ page.previous_page_number }}">Prev</a>
+  {% endif %}
+  {% for num in page.paginator.page_range %}
+    {% if num == page.number %}
+      <span class="current">{{ num }}</span>
+    {% elif num > page.number|add:"-3" and num < page.number|add:"3" %}
+      <a href="?q={{ query }}&verdict={{ verdict_filter }}&page={{ num }}">{{ num }}</a>
+    {% endif %}
+  {% endfor %}
+  {% if page.has_next %}
+    <a href="?q={{ query }}&verdict={{ verdict_filter }}&page={{ page.next_page_number }}">Next</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<p class="empty">
+  {% if query or verdict_filter %}
+    No scans match your search.
+  {% else %}
+    No scans yet. <a href="{% url 'index' %}">Run your first scan</a>.
+  {% endif %}
+</p>
+{% endif %}
+{% endblock %}

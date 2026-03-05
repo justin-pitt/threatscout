@@ -16,3 +16,6 @@ build/
 .pytest_cache/
 htmlcov/
 .coverage
+
+# Django
+web/db.sqlite3

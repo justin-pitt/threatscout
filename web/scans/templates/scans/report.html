@@ -1,0 +1,140 @@
+{% extends "scans/base.html" %}
+{% load scan_filters %}
+
+{% block title %}{{ record.indicator_value }} — ThreatScout{% endblock %}
+
+{% block content %}
+
+{# ── Verdict banner ─────────────────────────────────────────────── #}
+<div class="verdict-banner" style="background: {{ record.verdict|verdict_bg }}; border: 1px solid {{ record.verdict|verdict_color }}33;">
+  <div>
+    <div class="indicator" style="color: #0f172a;">{{ record.indicator_value }}</div>
+    <div class="meta">
+      {{ record.indicator_type }}
+      {% if record.resolved_ip %} &middot; resolved to {{ record.resolved_ip }}{% endif %}
+      {% if record.resolved_hostname %} &middot; hostname {{ record.resolved_hostname }}{% endif %}
+      &middot; {{ record.sources_queried }} source{{ record.sources_queried|pluralize }}
+      &middot; {{ record.query_time_seconds|floatformat:1 }}s
+      &middot; {{ record.created_at|date:"M d, Y H:i" }}
+    </div>
+  </div>
+  <div class="verdict-badge" style="background: {{ record.verdict|verdict_color }}; color: #fff;">
+    {{ record.verdict|upper }}
+    {% if record.verdict_confidence %}
+      {{ record.verdict_confidence }}%
+    {% endif %}
+  </div>
+</div>
+
+{# ── Scan again form ────────────────────────────────────────────── #}
+<form method="post" action="{% url 'scan' %}" class="scan-form" style="margin-bottom: 1.5rem;">
+  {% csrf_token %}
+  <input type="text" name="indicator" value="{{ record.indicator_value }}" placeholder="Re-scan or try another indicator">
+  <button type="submit" class="btn">Scan</button>
+</form>
+
+{# ── Original indicator findings ────────────────────────────────── #}
+<div class="section-label">Findings</div>
+
+{% for f in original_findings %}
+<div class="card {{ f.risk_level }}">
+  <div class="card-header">
+    <span class="card-source">{{ f.source }}</span>
+    <span class="card-risk" style="background: {{ f.risk_level|verdict_bg }}; color: {{ f.risk_level|verdict_color }};">
+      {{ f.risk_level|upper }}
+    </span>
+  </div>
+  {% if f.error %}
+    <div class="card-error">{{ f.error }}</div>
+  {% else %}
+    <div class="card-body">
+      <dl>
+        {% if f.detections != None and f.total_engines %}
+          <dt>Detections</dt><dd>{{ f.detections }} / {{ f.total_engines }} engines</dd>
+        {% endif %}
+        {% if f.confidence != None %}
+          <dt>Abuse Score</dt><dd>{{ f.confidence }} / 100</dd>
+        {% endif %}
+        {% if f.pulse_count != None %}
+          <dt>OTX Pulses</dt><dd>{{ f.pulse_count }}</dd>
+        {% endif %}
+        {% if f.cvss_score != None %}
+          <dt>CVSS</dt><dd>{{ f.cvss_score }}{% if f.cvss_severity %} ({{ f.cvss_severity }}){% endif %}</dd>
+        {% endif %}
+        {% if f.is_known_exploited != None %}
+          <dt>Known Exploited</dt>
+          <dd>{% if f.is_known_exploited %}<strong style="color: var(--red);">YES</strong>{% else %}No{% endif %}</dd>
+        {% endif %}
+        {% if f.description %}
+          <dt>Description</dt><dd>{{ f.description }}</dd>
+        {% endif %}
+        {% if f.country %}
+          <dt>Country</dt><dd>{{ f.country }}</dd>
+        {% endif %}
+        {% if f.isp %}
+          <dt>ISP</dt><dd>{{ f.isp }}</dd>
+        {% endif %}
+        {% if f.categories %}
+          <dt>Categories</dt><dd>{{ f.categories|join_list }}</dd>
+        {% endif %}
+        {% if f.malware_families %}
+          <dt>Malware</dt><dd>{{ f.malware_families|join_list }}</dd>
+        {% endif %}
+        {% if f.tags %}
+          <dt>Tags</dt>
+          <dd>{% for t in f.tags %}<span class="tag">{{ t }}</span>{% endfor %}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  {% endif %}
+</div>
+{% empty %}
+<p class="empty">No findings for the primary indicator.</p>
+{% endfor %}
+
+{# ── Enriched findings (DNS-resolved) ──────────────────────────── #}
+{% for ind_val, findings in enriched_groups.items %}
+<div class="section-label">Enriched: {{ ind_val }}</div>
+{% for f in findings %}
+<div class="card {{ f.risk_level }}">
+  <div class="card-header">
+    <span class="card-source">{{ f.source }}</span>
+    <span class="card-risk" style="background: {{ f.risk_level|verdict_bg }}; color: {{ f.risk_level|verdict_color }};">
+      {{ f.risk_level|upper }}
+    </span>
+  </div>
+  {% if f.error %}
+    <div class="card-error">{{ f.error }}</div>
+  {% else %}
+    <div class="card-body">
+      <dl>
+        {% if f.detections != None and f.total_engines %}
+          <dt>Detections</dt><dd>{{ f.detections }} / {{ f.total_engines }} engines</dd>
+        {% endif %}
+        {% if f.confidence != None %}
+          <dt>Abuse Score</dt><dd>{{ f.confidence }} / 100</dd>
+        {% endif %}
+        {% if f.pulse_count != None %}
+          <dt>OTX Pulses</dt><dd>{{ f.pulse_count }}</dd>
+        {% endif %}
+        {% if f.description %}
+          <dt>Description</dt><dd>{{ f.description }}</dd>
+        {% endif %}
+        {% if f.country %}
+          <dt>Country</dt><dd>{{ f.country }}</dd>
+        {% endif %}
+        {% if f.categories %}
+          <dt>Categories</dt><dd>{{ f.categories|join_list }}</dd>
+        {% endif %}
+        {% if f.tags %}
+          <dt>Tags</dt>
+          <dd>{% for t in f.tags %}<span class="tag">{{ t }}</span>{% endfor %}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endfor %}
+
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "scans/base.html" %}
+{% load scan_filters %}
+
+{% block title %}ThreatScout — Scan{% endblock %}
+
+{% block content %}
+<h1>Scan an Indicator</h1>
+<form method="post" action="{% url 'scan' %}" class="scan-form">
+  {% csrf_token %}
+  {{ form.indicator }}
+  <button type="submit" class="btn">Scan</button>
+</form>
+
+{% if form.errors %}
+<p style="color: var(--red); margin-bottom: 1rem;">{{ form.indicator.errors.0 }}</p>
+{% endif %}
+
+{% if recent %}
+<div class="section-label">Recent Scans</div>
+<ul class="recent-list">
+  {% for r in recent %}
+  <li>
+    <span class="time">{{ r.created_at|date:"M d, H:i" }}</span>
+    <span class="verdict-dot" style="background: {{ r.verdict|verdict_color }};"></span>
+    <a href="{% url 'report' r.pk %}">{{ r.indicator_value }}</a>
+    <span style="color: var(--text-dim); font-size: 0.8rem;">{{ r.indicator_type }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="empty">No scans yet. Paste an indicator above to get started.</p>
+{% endif %}
+{% endblock %}
