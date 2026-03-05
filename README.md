@@ -82,6 +82,7 @@ Sources without a key (MalwareBazaar, URLScan.io, WHOIS, CISA KEV, NVD) run auto
 ```
 threatscout/
 ├── __main__.py          # CLI entrypoint (click)
+├── api.py               # FastAPI REST API
 ├── scanner.py           # Orchestrates parallel queries + DNS enrichment
 ├── sources/
 │   ├── base.py          # ThreatSource abstract base class
@@ -108,7 +109,7 @@ threatscout/
 **Query flow:**
 
 ```
-CLI input (ip / domain / url / hash / cve)
+CLI or API input (ip / domain / url / hash / cve)
    │
    ▼
 Scanner — determines which sources support this indicator type
@@ -143,6 +144,60 @@ Scanner — determines which sources support this indicator type
                   (resolved IP / hostname shown in report header,
                    enriched findings in a separate labelled section)
 ```
+
+---
+
+## REST API
+
+ThreatScout also ships a FastAPI-based REST API for programmatic access.
+
+### Start the server
+
+```bash
+uvicorn threatscout.api:app --reload
+```
+
+### `POST /scan`
+
+Submit an indicator for scanning. The request body is JSON:
+
+```json
+{
+  "indicator": "8.8.8.8",
+  "indicator_type": null,
+  "sources": null,
+  "exclude": null
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `indicator` | string (required) | The value to scan (IP, domain, URL, hash, or CVE ID) |
+| `indicator_type` | string or null | Explicit type: `ip`, `domain`, `url`, `hash`, `cve`. Omit to auto-detect. |
+| `sources` | list or null | Only query these sources (by name). Omit to use all. |
+| `exclude` | list or null | Skip these sources (by name). |
+
+**Example with curl:**
+
+```bash
+curl -X POST http://localhost:8000/scan \
+  -H "Content-Type: application/json" \
+  -d '{"indicator": "CVE-2021-44228"}'
+```
+
+Returns the same JSON report structure as `threatscout scan --format json`.
+
+### `GET /health`
+
+Returns API status and the number of loaded sources.
+
+### Interactive docs
+
+FastAPI auto-generates interactive API docs at `http://localhost:8000/docs`.
+
+### Example script
+
+See [`examples/api_example.py`](examples/api_example.py) for a complete Python example using `requests`.
 
 ---
 
