@@ -9,7 +9,7 @@ API key: https://nvd.nist.gov/developers/request-an-api-key (free, instant)
 from __future__ import annotations
 import logging
 
-from restlink import ApiClient, ApiKeyAuth, RetryConfig, RateLimitConfig
+import httpx
 
 from threatscout.models.indicator import Indicator, IndicatorType
 from threatscout.models.finding import Finding, RiskLevel
@@ -31,26 +31,24 @@ class NVDSource(ThreatSource):
     supported_types = [IndicatorType.CVE]
 
     def __init__(self, api_key: str | None = None) -> None:
-        # NVD supports no-key access but at a much lower rate limit
-        auth = ApiKeyAuth(key=api_key, header="apiKey") if api_key else _NoAuth()
-        rate = RateLimitConfig(requests_per_second=1.5, burst=5) if api_key \
-            else RateLimitConfig(requests_per_second=0.15, burst=2)
-
-        self._client = ApiClient(
-            base_url=BASE_URL,
-            auth=auth,
-            rate_limit=rate,
-            retry=RetryConfig(max_attempts=3),
-        )
+        self._headers = {}
+        if api_key:
+            self._headers["apiKey"] = api_key
 
     @property
     def name(self) -> str:
         return "NVD (NIST)"
 
-    def query(self, indicator: Indicator) -> Finding:
+    async def query(self, indicator: Indicator) -> Finding:
         try:
-            response = self._client.get("/cves/2.0", params={"cveId": indicator.value})
-            vulns = response.data.get("vulnerabilities", [])
+            async with httpx.AsyncClient(
+                base_url=BASE_URL,
+                headers=self._headers,
+                timeout=15,
+            ) as client:
+                resp = await client.get("/cves/2.0", params={"cveId": indicator.value})
+            resp.raise_for_status()
+            vulns = resp.json().get("vulnerabilities", [])
             if not vulns:
                 return Finding(
                     source_name=self.name,
@@ -95,7 +93,7 @@ class NVDSource(ThreatSource):
             risk_level=risk,
             cvss_score=cvss_score,
             cvss_severity=cvss_severity,
-            description=description[:300] + f"… [+{len(description) - 300} chars]" if len(description) > 300 else description,
+            description=description[:300] + f"\u2026 [+{len(description) - 300} chars]" if len(description) > 300 else description,
             published_date=cve.get("published", "")[:10],
             raw=data,
         )
@@ -111,9 +109,3 @@ def _cvss_to_risk(score: float | None) -> RiskLevel:
     if score >= 4.0:
         return RiskLevel.SUSPICIOUS  # Medium
     return RiskLevel.CLEAN           # Low
-
-
-class _NoAuth:
-    """Placeholder auth for NVD when no key is provided."""
-    def apply(self, session) -> None:
-        pass

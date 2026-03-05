@@ -10,7 +10,7 @@ from __future__ import annotations
 import base64
 import logging
 
-from restlink import ApiClient, NotFoundError, RetryConfig, RateLimitConfig, ApiKeyAuth
+import httpx
 
 from threatscout.models.indicator import Indicator, IndicatorType
 from threatscout.models.finding import Finding, RiskLevel
@@ -32,30 +32,30 @@ class VirusTotalSource(ThreatSource):
     supported_types = [IndicatorType.IP, IndicatorType.DOMAIN, IndicatorType.URL, IndicatorType.HASH]
 
     def __init__(self, api_key: str) -> None:
-        self._client = ApiClient(
-            base_url=BASE_URL,
-            auth=ApiKeyAuth(key=api_key, header="x-apikey"),
-            # Free tier: 4 req/min — stay just under
-            rate_limit=RateLimitConfig(requests_per_second=0.06, burst=2),
-            retry=RetryConfig(max_attempts=3),
-        )
+        self._api_key = api_key
 
     @property
     def name(self) -> str:
         return "VirusTotal"
 
-    def query(self, indicator: Indicator) -> Finding:
+    async def query(self, indicator: Indicator) -> Finding:
         try:
             path = self._get_path(indicator)
-            response = self._client.get(path)
-            return self._normalize(indicator, response.data)
-        except NotFoundError:
-            return Finding(
-                source_name=self.name,
-                indicator=indicator,
-                risk_level=RiskLevel.UNKNOWN,
-                error="Indicator not found in VirusTotal database",
-            )
+            async with httpx.AsyncClient(
+                base_url=BASE_URL,
+                headers={"x-apikey": self._api_key},
+                timeout=15,
+            ) as client:
+                resp = await client.get(path)
+            if resp.status_code == 404:
+                return Finding(
+                    source_name=self.name,
+                    indicator=indicator,
+                    risk_level=RiskLevel.UNKNOWN,
+                    error="Indicator not found in VirusTotal database",
+                )
+            resp.raise_for_status()
+            return self._normalize(indicator, resp.json())
         except Exception as e:
             logger.warning(f"VirusTotal query failed for {indicator}: {e}")
             return Finding(source_name=self.name, indicator=indicator, error=str(e))

@@ -9,9 +9,7 @@ API key: https://otx.alienvault.com/accounts/register
 from __future__ import annotations
 import logging
 
-from restlink import ApiClient
-from restlink.auth import ApiKeyAuth
-from restlink.middleware import RetryConfig
+import httpx
 
 from threatscout.models.indicator import Indicator, IndicatorType
 from threatscout.models.finding import Finding, RiskLevel
@@ -34,22 +32,24 @@ class AlienVaultOTXSource(ThreatSource):
     supported_types = [IndicatorType.IP, IndicatorType.DOMAIN, IndicatorType.URL, IndicatorType.HASH]
 
     def __init__(self, api_key: str) -> None:
-        self._client = ApiClient(
-            base_url=BASE_URL,
-            auth=ApiKeyAuth(key=api_key, header="X-OTX-API-KEY"),
-            retry=RetryConfig(max_attempts=3),
-        )
+        self._api_key = api_key
 
     @property
     def name(self) -> str:
         return "AlienVault OTX"
 
-    def query(self, indicator: Indicator) -> Finding:
+    async def query(self, indicator: Indicator) -> Finding:
         try:
             section = "general"
             path = f"/indicators/{self._type_path(indicator)}/{indicator.value}/{section}"
-            response = self._client.get(path)
-            return self._normalize(indicator, response.data)
+            async with httpx.AsyncClient(
+                base_url=BASE_URL,
+                headers={"X-OTX-API-KEY": self._api_key},
+                timeout=15,
+            ) as client:
+                resp = await client.get(path)
+            resp.raise_for_status()
+            return self._normalize(indicator, resp.json())
         except Exception as e:
             logger.warning(f"OTX query failed for {indicator}: {e}")
             return Finding(source_name=self.name, indicator=indicator, error=str(e))

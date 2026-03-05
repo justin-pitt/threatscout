@@ -207,6 +207,8 @@ def render_csv(report: Report, min_risk: str | None = None) -> str:
 
 def main(indicator_str: str | None = None) -> Report:
     """Scan an indicator and render the report to the console."""
+    import asyncio
+
     sys.stdout.reconfigure(encoding="utf-8")
     if indicator_str is None:
         if len(sys.argv) < 2:
@@ -271,7 +273,7 @@ def main(indicator_str: str | None = None) -> Report:
 
     indicator = Indicator.detect(indicator_str)
     scanner = Scanner(sources=sources)
-    report = scanner.scan(indicator)
+    report = asyncio.run(scanner.scan(indicator))
     render_report(report)
     return report
 

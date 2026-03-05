@@ -9,10 +9,9 @@ Classifies IPs as internet background noise, known benign services, or targeted 
 """
 
 from __future__ import annotations
-import json
 import logging
-import urllib.request
-import urllib.error
+
+import httpx
 
 from threatscout.models.indicator import Indicator, IndicatorType
 from threatscout.models.finding import Finding, RiskLevel
@@ -40,25 +39,22 @@ class GreyNoiseSource(ThreatSource):
     def name(self) -> str:
         return "GreyNoise"
 
-    def query(self, indicator: Indicator) -> Finding:
+    async def query(self, indicator: Indicator) -> Finding:
         try:
-            req = urllib.request.Request(
-                f"{BASE_URL}/{indicator.value}",
+            async with httpx.AsyncClient(
                 headers={"key": self._api_key, "User-Agent": "threatscout/1.0"},
-            )
-            try:
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    data = json.loads(resp.read())
-            except urllib.error.HTTPError as e:
-                if e.code == 404:
-                    return Finding(
-                        source_name=self.name,
-                        indicator=indicator,
-                        risk_level=RiskLevel.UNKNOWN,
-                        description="IP not observed by GreyNoise",
-                    )
-                raise
-            return self._normalize(indicator, data)
+                timeout=15,
+            ) as client:
+                resp = await client.get(f"{BASE_URL}/{indicator.value}")
+            if resp.status_code == 404:
+                return Finding(
+                    source_name=self.name,
+                    indicator=indicator,
+                    risk_level=RiskLevel.UNKNOWN,
+                    description="IP not observed by GreyNoise",
+                )
+            resp.raise_for_status()
+            return self._normalize(indicator, resp.json())
         except Exception as e:
             logger.warning(f"GreyNoise query failed for {indicator}: {e}")
             return Finding(source_name=self.name, indicator=indicator, error=str(e))

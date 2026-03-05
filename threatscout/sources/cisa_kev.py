@@ -11,11 +11,11 @@ in the wild — this is the highest-confidence signal for prioritizing patching.
 """
 
 from __future__ import annotations
-import json
+import asyncio
 import logging
 import time
-import urllib.request
-from threading import Lock
+
+import httpx
 
 from threatscout.models.indicator import Indicator, IndicatorType
 from threatscout.models.finding import Finding, RiskLevel
@@ -28,7 +28,7 @@ KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulner
 # Cache the KEV catalog in memory for the lifetime of the process
 # so we only download it once per run even if querying multiple CVEs
 _kev_cache: dict[str, dict] | None = None
-_kev_cache_lock = Lock()
+_kev_cache_lock = asyncio.Lock()
 _kev_cache_time: float = 0.0
 _KEV_CACHE_TTL = 3600  # 1 hour
 
@@ -47,9 +47,9 @@ class CISAKevSource(ThreatSource):
     def name(self) -> str:
         return "CISA KEV"
 
-    def query(self, indicator: Indicator) -> Finding:
+    async def query(self, indicator: Indicator) -> Finding:
         try:
-            catalog = self._get_catalog()
+            catalog = await self._get_catalog()
             entry = catalog.get(indicator.value.upper())
 
             if entry:
@@ -77,17 +77,19 @@ class CISAKevSource(ThreatSource):
             logger.warning(f"CISA KEV query failed: {e}")
             return Finding(source_name=self.name, indicator=indicator, error=str(e))
 
-    def _get_catalog(self) -> dict[str, dict]:
+    async def _get_catalog(self) -> dict[str, dict]:
         """Download and cache the KEV catalog, indexed by CVE ID."""
         global _kev_cache, _kev_cache_time
 
-        with _kev_cache_lock:
+        async with _kev_cache_lock:
             if _kev_cache is not None and (time.time() - _kev_cache_time) < _KEV_CACHE_TTL:
                 return _kev_cache
 
             logger.info("Downloading CISA KEV catalog...")
-            with urllib.request.urlopen(KEV_URL, timeout=15) as resp:
-                data = json.loads(resp.read().decode())
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(KEV_URL)
+            resp.raise_for_status()
+            data = resp.json()
 
             _kev_cache = {v["cveID"]: v for v in data.get("vulnerabilities", [])}
             _kev_cache_time = time.time()

@@ -9,11 +9,9 @@ Shows open ports, exposed services, and known CVEs for a host.
 """
 
 from __future__ import annotations
-import json
 import logging
-import urllib.request
-import urllib.error
-import urllib.parse
+
+import httpx
 
 from threatscout.models.indicator import Indicator, IndicatorType
 from threatscout.models.finding import Finding, RiskLevel
@@ -40,29 +38,31 @@ class ShodanSource(ThreatSource):
     def name(self) -> str:
         return "Shodan"
 
-    def query(self, indicator: Indicator) -> Finding:
+    async def query(self, indicator: Indicator) -> Finding:
         try:
-            url = f"{BASE_URL}/{indicator.value}?key={urllib.parse.quote(self._api_key)}"
-            req = urllib.request.Request(url, headers={"User-Agent": "threatscout/1.0"})
-            try:
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    data = json.loads(resp.read())
-            except urllib.error.HTTPError as e:
-                if e.code in (401, 403):
-                    return Finding(
-                        source_name=self.name,
-                        indicator=indicator,
-                        error="Invalid or insufficient Shodan API key",
-                    )
-                if e.code == 404:
-                    return Finding(
-                        source_name=self.name,
-                        indicator=indicator,
-                        risk_level=RiskLevel.UNKNOWN,
-                        description="IP not found in Shodan",
-                    )
-                raise
-            return self._normalize(indicator, data)
+            async with httpx.AsyncClient(
+                headers={"User-Agent": "threatscout/1.0"},
+                timeout=15,
+            ) as client:
+                resp = await client.get(
+                    f"{BASE_URL}/{indicator.value}",
+                    params={"key": self._api_key},
+                )
+            if resp.status_code in (401, 403):
+                return Finding(
+                    source_name=self.name,
+                    indicator=indicator,
+                    error="Invalid or insufficient Shodan API key",
+                )
+            if resp.status_code == 404:
+                return Finding(
+                    source_name=self.name,
+                    indicator=indicator,
+                    risk_level=RiskLevel.UNKNOWN,
+                    description="IP not found in Shodan",
+                )
+            resp.raise_for_status()
+            return self._normalize(indicator, resp.json())
         except Exception as e:
             logger.warning(f"Shodan query failed for {indicator}: {e}")
             return Finding(source_name=self.name, indicator=indicator, error=str(e))

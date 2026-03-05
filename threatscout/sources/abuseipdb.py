@@ -9,9 +9,7 @@ API key: https://www.abuseipdb.com/register
 from __future__ import annotations
 import logging
 
-from restlink import ApiClient
-from restlink.auth import ApiKeyAuth
-from restlink.middleware import RetryConfig
+import httpx
 
 from threatscout.models.indicator import Indicator, IndicatorType
 from threatscout.models.finding import Finding, RiskLevel
@@ -33,24 +31,26 @@ class AbuseIPDBSource(ThreatSource):
     supported_types = [IndicatorType.IP]
 
     def __init__(self, api_key: str) -> None:
-        self._client = ApiClient(
-            base_url=BASE_URL,
-            auth=ApiKeyAuth(key=api_key, header="Key"),
-            retry=RetryConfig(max_attempts=3),
-        )
+        self._api_key = api_key
 
     @property
     def name(self) -> str:
         return "AbuseIPDB"
 
-    def query(self, indicator: Indicator) -> Finding:
+    async def query(self, indicator: Indicator) -> Finding:
         try:
-            response = self._client.get("/check", params={
-                "ipAddress": indicator.value,
-                "maxAgeInDays": 90,
-                "verbose": True,
-            })
-            return self._normalize(indicator, response.data)
+            async with httpx.AsyncClient(
+                base_url=BASE_URL,
+                headers={"Key": self._api_key, "Accept": "application/json"},
+                timeout=15,
+            ) as client:
+                resp = await client.get("/check", params={
+                    "ipAddress": indicator.value,
+                    "maxAgeInDays": 90,
+                    "verbose": True,
+                })
+            resp.raise_for_status()
+            return self._normalize(indicator, resp.json())
         except Exception as e:
             logger.warning(f"AbuseIPDB query failed for {indicator}: {e}")
             return Finding(source_name=self.name, indicator=indicator, error=str(e))

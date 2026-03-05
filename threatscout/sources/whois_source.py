@@ -7,6 +7,7 @@ Requires: pip install python-whois
 """
 
 from __future__ import annotations
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -33,7 +34,7 @@ class WHOISSource(ThreatSource):
     def name(self) -> str:
         return "WHOIS"
 
-    def query(self, indicator: Indicator) -> Finding:
+    async def query(self, indicator: Indicator) -> Finding:
         try:
             import whois
         except ImportError:
@@ -43,7 +44,7 @@ class WHOISSource(ThreatSource):
                 error="python-whois not installed. Run: pip install python-whois",
             )
         try:
-            w = whois.whois(indicator.value)
+            w = await asyncio.to_thread(whois.whois, indicator.value)
             return self._normalize(indicator, w)
         except Exception as e:
             logger.warning(f"WHOIS query failed for {indicator}: {e}")

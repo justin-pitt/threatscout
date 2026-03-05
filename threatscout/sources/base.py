@@ -20,7 +20,7 @@ class ThreatSource(ABC):
         return indicator.type in self.supported_types
 
     @abstractmethod
-    def query(self, indicator: Indicator) -> Finding:
+    async def query(self, indicator: Indicator) -> Finding:
         """
         Query this source for the given indicator.
 

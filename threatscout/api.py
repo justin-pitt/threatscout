@@ -129,7 +129,7 @@ class ScanRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 @app.post("/scan")
-def scan(req: ScanRequest):
+async def scan(req: ScanRequest):
     """
     Scan an indicator across all applicable threat intelligence sources.
 
@@ -169,7 +169,7 @@ def scan(req: ScanRequest):
             raise HTTPException(status_code=400, detail="No sources remain after filtering")
         scanner = Scanner(sources=filtered)
 
-    report = scanner.scan(indicator)
+    report = await scanner.scan(indicator)
     return report.to_dict()
 
 

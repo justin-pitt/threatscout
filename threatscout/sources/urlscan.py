@@ -7,10 +7,9 @@ API: https://urlscan.io/docs/api/
 """
 
 from __future__ import annotations
-import json
 import logging
-import urllib.request
-import urllib.parse
+
+import httpx
 
 from threatscout.models.indicator import Indicator, IndicatorType
 from threatscout.models.finding import Finding, RiskLevel
@@ -34,14 +33,16 @@ class URLScanSource(ThreatSource):
     def name(self) -> str:
         return "URLScan.io"
 
-    def query(self, indicator: Indicator) -> Finding:
+    async def query(self, indicator: Indicator) -> Finding:
         try:
             q = self._build_query(indicator)
-            url = f"{BASE_URL}?q={urllib.parse.quote(q)}&size=10"
-            req = urllib.request.Request(url, headers={"User-Agent": "threatscout/1.0"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                data = json.loads(resp.read())
-            return self._normalize(indicator, data)
+            async with httpx.AsyncClient(
+                headers={"User-Agent": "threatscout/1.0"},
+                timeout=15,
+            ) as client:
+                resp = await client.get(BASE_URL, params={"q": q, "size": 10})
+            resp.raise_for_status()
+            return self._normalize(indicator, resp.json())
         except Exception as e:
             logger.warning(f"URLScan query failed for {indicator}: {e}")
             return Finding(source_name=self.name, indicator=indicator, error=str(e))

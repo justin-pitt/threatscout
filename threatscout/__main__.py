@@ -3,6 +3,7 @@ ThreatScout CLI entrypoint.
 """
 
 from __future__ import annotations
+import asyncio
 import json
 import logging
 import os
@@ -105,7 +106,7 @@ def _run_query(
 
     indicator = Indicator.detect(value)
     scanner = _build_scanner(include=include, exclude=exclude)
-    report = scanner.scan(indicator)
+    report = asyncio.run(scanner.scan(indicator))
 
     if fmt == "json":
         data = json.dumps(report.to_dict(), indent=2)

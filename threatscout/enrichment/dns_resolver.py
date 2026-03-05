@@ -1,8 +1,9 @@
 """
-DNS resolution utility — forward and reverse DNS lookups for indicator enrichment.
+DNS resolution utility — async forward and reverse DNS lookups for indicator enrichment.
 """
 
 from __future__ import annotations
+import asyncio
 import logging
 import socket
 from urllib.parse import urlparse
@@ -12,7 +13,7 @@ from threatscout.models.indicator import Indicator, IndicatorType
 logger = logging.getLogger(__name__)
 
 
-def resolve_to_hostname(indicator: Indicator) -> str | None:
+async def resolve_to_hostname(indicator: Indicator) -> str | None:
     """
     Reverse DNS: resolve an IP indicator to its PTR hostname.
 
@@ -23,7 +24,7 @@ def resolve_to_hostname(indicator: Indicator) -> str | None:
         return None
 
     try:
-        hostname, _, _ = socket.gethostbyaddr(indicator.value)
+        hostname, _, _ = await asyncio.to_thread(socket.gethostbyaddr, indicator.value)
         logger.debug(f"Reverse DNS resolved {indicator.value} -> {hostname}")
         return hostname
     except (socket.herror, socket.gaierror) as e:
@@ -31,7 +32,7 @@ def resolve_to_hostname(indicator: Indicator) -> str | None:
         return None
 
 
-def resolve_to_ip(indicator: Indicator) -> str | None:
+async def resolve_to_ip(indicator: Indicator) -> str | None:
     """
     Resolve a DOMAIN or URL indicator to its IP address (IPv4 preferred, IPv6 fallback).
 
@@ -49,8 +50,8 @@ def resolve_to_ip(indicator: Indicator) -> str | None:
         return None
 
     try:
-        # getaddrinfo returns both IPv4 and IPv6; prefer IPv4 (AF_INET) when available
-        results = socket.getaddrinfo(hostname, None)
+        loop = asyncio.get_running_loop()
+        results = await loop.getaddrinfo(hostname, None)
         ipv4 = [r[4][0] for r in results if r[0] == socket.AF_INET]
         ipv6 = [r[4][0] for r in results if r[0] == socket.AF_INET6]
         ip = (ipv4 or ipv6 or [None])[0]
