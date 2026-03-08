@@ -226,6 +226,16 @@ See [`examples/api_example.py`](examples/api_example.py) for a complete Python e
 
 ThreatScout includes a Django web interface for browser-based scanning and analysis.
 
+### Screenshots
+
+| Scan | Report |
+|------|--------|
+| ![Scan page](docs/screenshots/scan.png) | ![Report page](docs/screenshots/report.png) |
+
+| Dashboard | History |
+|-----------|---------|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![History](docs/screenshots/history.png) |
+
 ### Start the web server
 
 ```bash
