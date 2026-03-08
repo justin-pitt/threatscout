@@ -54,7 +54,7 @@ python -m threatscout.output.console CVE-2021-44228
 
 When investigating a suspicious indicator, analysts typically open 4–6 browser tabs to check VirusTotal, AbuseIPDB, AlienVault OTX, and NVD separately, then manually piece together the results. This tool automates that process — querying all configured sources in parallel and returning a single normalized report in seconds.
 
-It is built on top of [restlink](https://github.com/justin-pitt/restlink), which handles authentication, retries, and rate limiting for each source API.
+It uses async HTTP via `httpx` with `asyncio.gather()` to query all sources concurrently.
 
 ---
 
@@ -104,6 +104,27 @@ threatscout/
 │   └── dns_resolver.py  # Forward DNS (domain/URL → IP/IPv6) and reverse DNS (IP → hostname)
 └── output/
     └── console.py       # Rich terminal output + CSV export
+
+web/                         # Django web UI
+├── config/
+│   ├── settings.py          # Django settings (SQLite / PostgreSQL)
+│   ├── urls.py              # Root URL config
+│   └── wsgi.py
+├── scans/
+│   ├── views.py             # Scan, report, dashboard, history views + JSON API
+│   ├── models.py            # ScanRecord model (persists results to DB)
+│   ├── forms.py             # ScanForm (indicator input)
+│   ├── urls.py              # Route definitions
+│   ├── scanner_factory.py   # Builds scanner from environment
+│   ├── templatetags/
+│   │   └── scan_filters.py  # Verdict color/badge template filters
+│   └── templates/scans/
+│       ├── base.html        # Base layout with nav + global styles
+│       ├── index.html       # Scan page with async JS loading overlay
+│       ├── report.html      # Scan report with collapsible source cards
+│       ├── dashboard.html   # Analytics dashboard with Chart.js charts
+│       └── history.html     # Paginated scan history with search
+└── manage.py
 ```
 
 **Query flow:**
@@ -201,6 +222,49 @@ See [`examples/api_example.py`](examples/api_example.py) for a complete Python e
 
 ---
 
+## Web UI
+
+ThreatScout includes a Django web interface for browser-based scanning and analysis.
+
+### Start the web server
+
+```bash
+cd web
+python manage.py runserver
+```
+
+Then open `http://localhost:8000` in your browser.
+
+### Pages
+
+- **Scan** (`/`) — Enter any indicator to scan. Uses async JavaScript with an animated loading overlay while querying sources.
+- **Dashboard** (`/dashboard/`) — Analytics with scan volume over time (bar chart), verdict distribution (doughnut chart), and top queried indicators.
+- **Report** (`/report/<id>/`) — Detailed scan results with verdict banner, summary stats, and collapsible per-source finding cards. Malicious/suspicious findings are expanded by default.
+- **History** (`/history/`) — Paginated scan history with full-text search and verdict filtering.
+
+### Database
+
+By default the web UI uses SQLite (`web/db.sqlite3`). For PostgreSQL, set these in `.env`:
+
+```env
+DJANGO_SECRET_KEY=your-secret-key
+DB_ENGINE=django.db.backends.postgresql
+DB_NAME=threatscout
+DB_USER=your-user
+DB_PASSWORD=your-password
+DB_HOST=localhost
+DB_PORT=5432
+```
+
+Run migrations before first use:
+
+```bash
+cd web
+python manage.py migrate
+```
+
+---
+
 ## Installation
 
 **Prerequisites:** Python 3.10+
@@ -211,7 +275,7 @@ cd threatscout
 pip install -e .
 ```
 
-`pip install -e .` automatically installs all dependencies including [restlink](https://github.com/justin-pitt/restlink) directly from GitHub.
+`pip install -e .` automatically installs all dependencies (httpx, click, rich, FastAPI, etc.).
 
 Copy `.env.example` to `.env` and add your API keys:
 
