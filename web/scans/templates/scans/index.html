@@ -4,30 +4,113 @@
 {% block title %}ThreatScout — Scan{% endblock %}
 
 {% block content %}
-<h1>Scan an Indicator</h1>
-<form method="post" action="{% url 'scan' %}" class="scan-form">
-  {% csrf_token %}
-  {{ form.indicator }}
-  <button type="submit" class="btn">Scan</button>
-</form>
+<div style="max-width: 640px; margin: 3rem auto 0;">
+  <h1 style="font-size: 1.75rem; text-align: center; margin-bottom: 0.35rem;">Scan an Indicator</h1>
+  <p style="text-align: center; color: var(--text-dim); font-size: 0.875rem; margin-bottom: 1.75rem;">
+    Supports IPv4/v6, Domains, URLs, File Hashes (MD5/SHA1/SHA256), CVE IDs
+  </p>
 
-{% if form.errors %}
-<p style="color: var(--red); margin-bottom: 1rem;">{{ form.indicator.errors.0 }}</p>
-{% endif %}
+  <form id="scan-form" method="post" action="{% url 'scan' %}" class="scan-form" style="margin-bottom: 0;">
+    {% csrf_token %}
+    <input type="text" id="scan-input" name="indicator" placeholder="Enter an IP, domain, URL, hash, or CVE..." autocomplete="off" autofocus>
+    <button type="submit" class="btn">Scan</button>
+  </form>
+
+  {% if form.errors %}
+  <p id="form-error" style="color: var(--red); margin-top: 0.75rem; font-size: 0.875rem;">{{ form.indicator.errors.0 }}</p>
+  {% endif %}
+</div>
 
 {% if recent %}
-<div class="section-label">Recent Scans</div>
+<div class="section-label" style="margin-top: 3rem;">Recent Scans</div>
 <ul class="recent-list">
   {% for r in recent %}
   <li>
     <span class="time">{{ r.created_at|date:"M d, H:i" }}</span>
-    <span class="verdict-dot" style="background: {{ r.verdict|verdict_color }};"></span>
+    <span class="verdict-pill {{ r.verdict }}">{{ r.verdict }}</span>
     <a href="{% url 'report' r.pk %}">{{ r.indicator_value }}</a>
-    <span style="color: var(--text-dim); font-size: 0.8rem;">{{ r.indicator_type }}</span>
+    <span style="color: var(--text-muted); font-size: 0.78rem; margin-left: auto;">{{ r.indicator_type }}</span>
   </li>
   {% endfor %}
 </ul>
 {% else %}
-<p class="empty">No scans yet. Paste an indicator above to get started.</p>
+<p class="empty" style="margin-top: 3rem;">No scans yet. Paste an indicator above to get started.</p>
 {% endif %}
+
+{# ── Scanning overlay ─────────────────────────────────────────── #}
+<div id="scan-overlay" class="scan-overlay">
+  <div class="pulse-ring"><div class="inner-dot"></div></div>
+  <div class="scan-text">Querying threat intelligence sources<span id="dots"></span></div>
+  <div id="scan-target" class="scan-indicator"></div>
+  <div id="scan-error" class="scan-error"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var form = document.getElementById('scan-form');
+  var overlay = document.getElementById('scan-overlay');
+  var scanTarget = document.getElementById('scan-target');
+  var scanError = document.getElementById('scan-error');
+  var dots = document.getElementById('dots');
+  var dotInterval;
+
+  function getCookie(name) {
+    var cookies = document.cookie.split(';');
+    for (var i = 0; i < cookies.length; i++) {
+      var c = cookies[i].trim();
+      if (c.indexOf(name + '=') === 0) return c.substring(name.length + 1);
+    }
+    return '';
+  }
+
+  function animateDots() {
+    var count = 0;
+    dotInterval = setInterval(function() {
+      count = (count + 1) % 4;
+      dots.textContent = '.'.repeat(count);
+    }, 500);
+  }
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    var input = document.getElementById('scan-input');
+    var indicator = input.value.trim();
+    if (!indicator) return;
+
+    // Show overlay
+    scanTarget.textContent = indicator;
+    scanError.style.display = 'none';
+    overlay.classList.add('active');
+    animateDots();
+
+    fetch('{% url "api_scan" %}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify({indicator: indicator})
+    })
+    .then(function(res) { return res.json().then(function(data) { return {ok: res.ok, data: data}; }); })
+    .then(function(result) {
+      clearInterval(dotInterval);
+      if (result.ok) {
+        window.location.href = '/report/' + result.data.pk + '/';
+      } else {
+        scanError.textContent = result.data.error || 'Scan failed';
+        scanError.style.display = 'block';
+        setTimeout(function() { overlay.classList.remove('active'); }, 2000);
+      }
+    })
+    .catch(function(err) {
+      clearInterval(dotInterval);
+      scanError.textContent = 'Network error. Please try again.';
+      scanError.style.display = 'block';
+      setTimeout(function() { overlay.classList.remove('active'); }, 2000);
+    });
+  });
+})();
+</script>
 {% endblock %}

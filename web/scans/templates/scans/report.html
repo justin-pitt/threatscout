@@ -13,8 +13,6 @@
       {{ record.indicator_type }}
       {% if record.resolved_ip %} &middot; resolved to {{ record.resolved_ip }}{% endif %}
       {% if record.resolved_hostname %} &middot; hostname {{ record.resolved_hostname }}{% endif %}
-      &middot; {{ record.sources_queried }} source{{ record.sources_queried|pluralize }}
-      &middot; {{ record.query_time_seconds|floatformat:1 }}s
       &middot; {{ record.created_at|date:"M d, Y H:i" }}
     </div>
   </div>
@@ -23,6 +21,28 @@
     {% if record.verdict_confidence %}
       {{ record.verdict_confidence }}%
     {% endif %}
+  </div>
+</div>
+
+{# ── Summary stats ─────────────────────────────────────────────── #}
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-value">{{ record.sources_queried }}</div>
+    <div class="stat-label">Sources Queried</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" {% if record.sources_errored %}style="color: var(--red);"{% endif %}>
+      {{ record.sources_errored }}
+    </div>
+    <div class="stat-label">Errors</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ record.query_time_seconds|floatformat:1 }}s</div>
+    <div class="stat-label">Query Time</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{% if record.verdict_confidence %}{{ record.verdict_confidence }}%{% else %}&mdash;{% endif %}</div>
+    <div class="stat-label">Confidence</div>
   </div>
 </div>
 
@@ -38,55 +58,59 @@
 
 {% for f in original_findings %}
 <div class="card {{ f.risk_level }}">
-  <div class="card-header">
-    <span class="card-source">{{ f.source }}</span>
-    <span class="card-risk" style="background: {{ f.risk_level|verdict_bg }}; color: {{ f.risk_level|verdict_color }};">
-      {{ f.risk_level|upper }}
-    </span>
-  </div>
-  {% if f.error %}
-    <div class="card-error">{{ f.error }}</div>
-  {% else %}
-    <div class="card-body">
-      <dl>
-        {% if f.detections != None and f.total_engines %}
-          <dt>Detections</dt><dd>{{ f.detections }} / {{ f.total_engines }} engines</dd>
-        {% endif %}
-        {% if f.confidence != None %}
-          <dt>Abuse Score</dt><dd>{{ f.confidence }} / 100</dd>
-        {% endif %}
-        {% if f.pulse_count != None %}
-          <dt>OTX Pulses</dt><dd>{{ f.pulse_count }}</dd>
-        {% endif %}
-        {% if f.cvss_score != None %}
-          <dt>CVSS</dt><dd>{{ f.cvss_score }}{% if f.cvss_severity %} ({{ f.cvss_severity }}){% endif %}</dd>
-        {% endif %}
-        {% if f.is_known_exploited != None %}
-          <dt>Known Exploited</dt>
-          <dd>{% if f.is_known_exploited %}<strong style="color: var(--red);">YES</strong>{% else %}No{% endif %}</dd>
-        {% endif %}
-        {% if f.description %}
-          <dt>Description</dt><dd>{{ f.description }}</dd>
-        {% endif %}
-        {% if f.country %}
-          <dt>Country</dt><dd>{{ f.country }}</dd>
-        {% endif %}
-        {% if f.isp %}
-          <dt>ISP</dt><dd>{{ f.isp }}</dd>
-        {% endif %}
-        {% if f.categories %}
-          <dt>Categories</dt><dd>{{ f.categories|join_list }}</dd>
-        {% endif %}
-        {% if f.malware_families %}
-          <dt>Malware</dt><dd>{{ f.malware_families|join_list }}</dd>
-        {% endif %}
-        {% if f.tags %}
-          <dt>Tags</dt>
-          <dd>{% for t in f.tags %}<span class="tag">{{ t }}</span>{% endfor %}</dd>
-        {% endif %}
-      </dl>
-    </div>
-  {% endif %}
+  <details {% if f.risk_level == 'malicious' or f.risk_level == 'suspicious' %}open{% endif %}>
+    <summary>
+      <div class="card-header">
+        <span class="card-source">{{ f.source }}</span>
+        <span class="card-risk" style="background: {{ f.risk_level|verdict_bg }}; color: {{ f.risk_level|verdict_color }};">
+          {{ f.risk_level|upper }}
+        </span>
+      </div>
+    </summary>
+    {% if f.error %}
+      <div class="card-error">{{ f.error }}</div>
+    {% else %}
+      <div class="card-body">
+        <dl>
+          {% if f.detections != None and f.total_engines %}
+            <dt>Detections</dt><dd>{{ f.detections }} / {{ f.total_engines }} engines</dd>
+          {% endif %}
+          {% if f.confidence != None %}
+            <dt>Abuse Score</dt><dd>{{ f.confidence }} / 100</dd>
+          {% endif %}
+          {% if f.pulse_count != None %}
+            <dt>OTX Pulses</dt><dd>{{ f.pulse_count }}</dd>
+          {% endif %}
+          {% if f.cvss_score != None %}
+            <dt>CVSS</dt><dd>{{ f.cvss_score }}{% if f.cvss_severity %} ({{ f.cvss_severity }}){% endif %}</dd>
+          {% endif %}
+          {% if f.is_known_exploited != None %}
+            <dt>Known Exploited</dt>
+            <dd>{% if f.is_known_exploited %}<strong style="color: var(--red);">YES</strong>{% else %}No{% endif %}</dd>
+          {% endif %}
+          {% if f.description %}
+            <dt>Description</dt><dd>{{ f.description }}</dd>
+          {% endif %}
+          {% if f.country %}
+            <dt>Country</dt><dd>{{ f.country }}</dd>
+          {% endif %}
+          {% if f.isp %}
+            <dt>ISP</dt><dd>{{ f.isp }}</dd>
+          {% endif %}
+          {% if f.categories %}
+            <dt>Categories</dt><dd>{{ f.categories|join_list }}</dd>
+          {% endif %}
+          {% if f.malware_families %}
+            <dt>Malware</dt><dd>{{ f.malware_families|join_list }}</dd>
+          {% endif %}
+          {% if f.tags %}
+            <dt>Tags</dt>
+            <dd>{% for t in f.tags %}<span class="tag">{{ t }}</span>{% endfor %}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    {% endif %}
+  </details>
 </div>
 {% empty %}
 <p class="empty">No findings for the primary indicator.</p>
@@ -97,42 +121,46 @@
 <div class="section-label">Enriched: {{ ind_val }}</div>
 {% for f in findings %}
 <div class="card {{ f.risk_level }}">
-  <div class="card-header">
-    <span class="card-source">{{ f.source }}</span>
-    <span class="card-risk" style="background: {{ f.risk_level|verdict_bg }}; color: {{ f.risk_level|verdict_color }};">
-      {{ f.risk_level|upper }}
-    </span>
-  </div>
-  {% if f.error %}
-    <div class="card-error">{{ f.error }}</div>
-  {% else %}
-    <div class="card-body">
-      <dl>
-        {% if f.detections != None and f.total_engines %}
-          <dt>Detections</dt><dd>{{ f.detections }} / {{ f.total_engines }} engines</dd>
-        {% endif %}
-        {% if f.confidence != None %}
-          <dt>Abuse Score</dt><dd>{{ f.confidence }} / 100</dd>
-        {% endif %}
-        {% if f.pulse_count != None %}
-          <dt>OTX Pulses</dt><dd>{{ f.pulse_count }}</dd>
-        {% endif %}
-        {% if f.description %}
-          <dt>Description</dt><dd>{{ f.description }}</dd>
-        {% endif %}
-        {% if f.country %}
-          <dt>Country</dt><dd>{{ f.country }}</dd>
-        {% endif %}
-        {% if f.categories %}
-          <dt>Categories</dt><dd>{{ f.categories|join_list }}</dd>
-        {% endif %}
-        {% if f.tags %}
-          <dt>Tags</dt>
-          <dd>{% for t in f.tags %}<span class="tag">{{ t }}</span>{% endfor %}</dd>
-        {% endif %}
-      </dl>
-    </div>
-  {% endif %}
+  <details {% if f.risk_level == 'malicious' or f.risk_level == 'suspicious' %}open{% endif %}>
+    <summary>
+      <div class="card-header">
+        <span class="card-source">{{ f.source }}</span>
+        <span class="card-risk" style="background: {{ f.risk_level|verdict_bg }}; color: {{ f.risk_level|verdict_color }};">
+          {{ f.risk_level|upper }}
+        </span>
+      </div>
+    </summary>
+    {% if f.error %}
+      <div class="card-error">{{ f.error }}</div>
+    {% else %}
+      <div class="card-body">
+        <dl>
+          {% if f.detections != None and f.total_engines %}
+            <dt>Detections</dt><dd>{{ f.detections }} / {{ f.total_engines }} engines</dd>
+          {% endif %}
+          {% if f.confidence != None %}
+            <dt>Abuse Score</dt><dd>{{ f.confidence }} / 100</dd>
+          {% endif %}
+          {% if f.pulse_count != None %}
+            <dt>OTX Pulses</dt><dd>{{ f.pulse_count }}</dd>
+          {% endif %}
+          {% if f.description %}
+            <dt>Description</dt><dd>{{ f.description }}</dd>
+          {% endif %}
+          {% if f.country %}
+            <dt>Country</dt><dd>{{ f.country }}</dd>
+          {% endif %}
+          {% if f.categories %}
+            <dt>Categories</dt><dd>{{ f.categories|join_list }}</dd>
+          {% endif %}
+          {% if f.tags %}
+            <dt>Tags</dt>
+            <dd>{% for t in f.tags %}<span class="tag">{{ t }}</span>{% endfor %}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    {% endif %}
+  </details>
 </div>
 {% endfor %}
 {% endfor %}

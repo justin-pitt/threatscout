@@ -1,9 +1,14 @@
 import asyncio
 import json
+from datetime import timedelta
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, Count, Avg
+from django.db.models.functions import TruncDate
+from django.http import JsonResponse
+from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from threatscout.models.indicator import Indicator
 
@@ -39,6 +44,33 @@ def scan(request):
     record.save()
 
     return redirect("report", pk=record.pk)
+
+
+@require_POST
+def api_scan(request):
+    """JSON endpoint for async scanning from frontend JS."""
+    try:
+        body = json.loads(request.body)
+        raw_value = body.get("indicator", "").strip()
+    except (json.JSONDecodeError, AttributeError):
+        raw_value = request.POST.get("indicator", "").strip()
+
+    if not raw_value:
+        return JsonResponse({"error": "Indicator required"}, status=400)
+
+    indicator = Indicator.detect(raw_value)
+    scanner = build_scanner()
+    report = asyncio.run(scanner.scan(indicator))
+    report_dict = report.to_dict()
+
+    record = ScanRecord.from_report(report_dict)
+    record.save()
+
+    return JsonResponse({
+        "pk": record.pk,
+        "verdict": record.verdict,
+        "indicator": record.indicator_value,
+    })
 
 
 def report(request, pk):
@@ -88,4 +120,58 @@ def history(request):
         "page": page,
         "query": query,
         "verdict_filter": verdict_filter,
+    })
+
+
+def dashboard(request):
+    """Analytics dashboard with scan statistics."""
+    now = timezone.now()
+    thirty_days_ago = now - timedelta(days=30)
+
+    # Scans per day (last 30 days)
+    daily_scans = list(
+        ScanRecord.objects
+        .filter(created_at__gte=thirty_days_ago)
+        .annotate(date=TruncDate('created_at'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .order_by('date')
+    )
+
+    # Verdict distribution
+    verdict_dist = list(
+        ScanRecord.objects
+        .values('verdict')
+        .annotate(count=Count('id'))
+        .order_by('-count')
+    )
+
+    # Top indicators
+    top_indicators = list(
+        ScanRecord.objects
+        .values('indicator_value', 'indicator_type')
+        .annotate(count=Count('id'))
+        .order_by('-count')[:10]
+    )
+
+    # Total stats
+    total_scans = ScanRecord.objects.count()
+    malicious_count = ScanRecord.objects.filter(verdict='malicious').count()
+    clean_count = ScanRecord.objects.filter(verdict='clean').count()
+    avg_query_time = ScanRecord.objects.aggregate(
+        avg_time=Avg('query_time_seconds')
+    )['avg_time'] or 0
+
+    return render(request, "scans/dashboard.html", {
+        "daily_scans_json": json.dumps([
+            {"date": str(d["date"]), "count": d["count"]} for d in daily_scans
+        ]),
+        "verdict_dist_json": json.dumps([
+            {"verdict": d["verdict"], "count": d["count"]} for d in verdict_dist
+        ]),
+        "top_indicators": top_indicators,
+        "total_scans": total_scans,
+        "malicious_count": malicious_count,
+        "clean_count": clean_count,
+        "avg_query_time": round(avg_query_time, 1),
     })

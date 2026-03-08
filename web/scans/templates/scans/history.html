@@ -7,7 +7,7 @@
 <h1>Scan History</h1>
 
 <form method="get" class="search-bar">
-  <input type="text" name="q" value="{{ query }}" placeholder="Search indicators, types, IPs, hostnames...">
+  <input type="text" name="q" value="{{ query }}" placeholder="Search indicators, types, IPs, hostnames..." style="flex: 1;">
   <select name="verdict">
     <option value="">All verdicts</option>
     <option value="malicious" {% if verdict_filter == "malicious" %}selected{% endif %}>Malicious</option>
@@ -34,16 +34,15 @@
   <tbody>
     {% for r in page %}
     <tr>
-      <td style="color: var(--text-dim); white-space: nowrap;">{{ r.created_at|date:"M d, H:i" }}</td>
+      <td style="color: var(--text-muted); white-space: nowrap;">{{ r.created_at|date:"M d, H:i" }}</td>
       <td><a href="{% url 'report' r.pk %}">{{ r.indicator_value }}</a></td>
       <td style="color: var(--text-dim);">{{ r.indicator_type }}</td>
       <td>
-        <span class="verdict-dot" style="background: {{ r.verdict|verdict_color }};"></span>
-        {{ r.verdict }}
+        <span class="verdict-pill {{ r.verdict }}">{{ r.verdict }}</span>
       </td>
       <td>{% if r.verdict_confidence %}{{ r.verdict_confidence }}%{% else %}&mdash;{% endif %}</td>
       <td>{{ r.sources_queried }}{% if r.sources_errored %} <span style="color: var(--red);">({{ r.sources_errored }} err)</span>{% endif %}</td>
-      <td style="color: var(--text-dim);">{{ r.query_time_seconds|floatformat:1 }}s</td>
+      <td style="color: var(--text-muted);">{{ r.query_time_seconds|floatformat:1 }}s</td>
     </tr>
     {% endfor %}
   </tbody>
